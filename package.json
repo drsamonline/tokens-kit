@@ -1,0 +1,11 @@
+{
+  "name": "tokens-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "tokens-kit \u2014 the Lobe UI token set as data: 121 colour names, 187 values per mode, sizes and shadows, generated from lobe-mygo.",
+  "scripts": {
+    "test": "node test-node.js",
+    "gen": "node scripts/gen-tokens.js"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="color-scheme" content="dark light"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tokens-kit — the Lobe UI token set as data</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--ink:#e7e9ee;--mut:#9aa3b2;--line:#252a34;--acc:#22c55e}
+:root[data-theme="light"]{color-scheme:light;--bg:#f6f7f9;--card:#fff;--ink:#0f1115;--mut:#4b5563;--line:#dfe3e8;--acc:#15803d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header,main,footer{max-width:980px;margin:0 auto;padding:24px 20px}
+h1{margin:0 0 6px;font-size:24px}h2{margin:34px 0 10px;font-size:17px}
+.mut{color:var(--mut)}
+.theme-btn{float:right;width:30px;height:30px;margin:2px 0 0 10px;padding:0;background:transparent;color:inherit;
+  border:1px solid var(--line);border-radius:50%;cursor:pointer;opacity:.8}
+.theme-btn:hover{opacity:1}.theme-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.bar button{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+  padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.bar button[aria-pressed="true"]{border-color:var(--acc);color:var(--acc)}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin:12px 0}
+.sw{border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;background:var(--card)}
+.sw .chip{height:44px}
+.sw .meta{padding:6px 8px;font-size:11px;line-height:1.35}
+.sw .name{font-weight:600;word-break:break-word}
+.sw .val{color:var(--mut);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px}
+h3{margin:22px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600}
+code{background:rgba(127,127,127,.14);padding:1px 5px;border-radius:4px;font-size:12.5px}
+.shadow-row{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin:16px 0}
+.shadow-card{background:var(--card);border-radius:10px;padding:18px;text-align:center;font-size:13px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);opacity:0;transition:opacity .18s,transform .18s;
+  background:var(--acc);color:#06210f;font-weight:600;font-size:13px;padding:8px 14px;border-radius:999px;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+</style></head><body>
+<header>
+  <button class="theme-btn" id="theme" title="Switch mode" aria-label="Switch mode">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+  </button>
+  <h1>tokens-kit</h1>
+  <p class="mut">121 colour names, 187 values per mode, 19 size fields and three elevations —
+  generated from <a href="https://github.com/lobehub/lobe-mygo">lobe-mygo</a>'s token source.
+  <strong>Nothing here is applied to your app.</strong> This page calls <code>apply()</code> on its own
+  <code>&lt;html&gt;</code> element to show you the values; importing the kit does nothing.</p>
+</header>
+
+<main>
+  <div class="bar" id="modes">
+    <button data-mode="light" aria-pressed="false">light</button>
+    <button data-mode="dark" aria-pressed="true">dark</button>
+    <button id="copy-css">copy CSS variables</button>
+  </div>
+
+  <h2>Contrast</h2>
+  <table id="contrast"><thead><tr><th>pair</th><th>ratio</th><th>WCAG</th></tr></thead><tbody></tbody></table>
+
+  <h2>Colour tokens</h2>
+  <p class="mut">Click any swatch to copy <code>Tokens.mode.Name</code>.</p>
+  <div id="swatches"></div>
+
+  <h2>Elevation</h2>
+  <div class="shadow-row" id="shadows"></div>
+
+  <h2>Scale</h2>
+  <table id="scale"><thead><tr><th>token</th><th>value</th></tr></thead><tbody></tbody></table>
+</main>
+
+<footer class="mut" style="font-size:13px">
+  <p>PolyForm Noncommercial 1.0.0. (c) 2026 Dr Sohil Momin. Token values from lobe-mygo (MIT) and @lobehub/ui 6.15.2.</p>
+</footer>
+<div class="toast" id="toast">copied</div>
+
+<script src="../tokens-kit.js"></script>
+<script>
+var T = window.Tokens;
+var mode = "dark";
+
+function toast(msg) {
+  var el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("on");
+  setTimeout(function () { el.classList.remove("on"); }, 1100);
+}
+
+function paint(next) {
+  mode = next;
+  /* The one call that touches the DOM, and it is aimed at this page only. */
+  T.apply(document.documentElement, mode);
+  document.documentElement.setAttribute("data-theme", mode);
+  document.querySelectorAll("#modes button[data-mode]").forEach(function (b) {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  });
+  draw();
+}
+
+/* ---------- swatches, grouped by token prefix ---------- */
+function groupOf(name) {
+  var m = /^(Bg|Text|Fill|Border|Primary|Error|Warning|Success|Info|Link|Icon|Split|Shadow|Highlight|White|Blue|Red|Gold|Volcano|Magenta|Purple|Geekblue|Cyan|Lime|Orange|Yellow)/.exec(name);
+  return m ? m[1] : "Other";
+}
+
+function drawSwatches() {
+  var host = document.getElementById("swatches");
+  host.innerHTML = "";
+  var tokens = T.tokens(mode);
+  var groups = {};
+  T.names.forEach(function (n) {
+    var g = groupOf(n);
+    (groups[g] = groups[g] || []).push(n);
+  });
+  Object.keys(groups).sort().forEach(function (g) {
+    var h = document.createElement("h3");
+    h.textContent = g + " (" + groups[g].length + ")";
+    host.appendChild(h);
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    groups[g].forEach(function (n) {
+      var card = document.createElement("div");
+      card.className = "sw";
+      card.title = "copy Tokens." + mode + "." + n;
+      var chip = document.createElement("div");
+      chip.className = "chip";
+      chip.style.background = tokens[n];
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      meta.innerHTML = '<div class="name">' + n + '</div><div class="val">' + tokens[n] + "</div>";
+      card.appendChild(chip); card.appendChild(meta);
+      card.addEventListener("click", function () {
+        var text = "Tokens." + mode + "." + n;
+        if (navigator.clipboard) navigator.clipboard.writeText(text);
+        toast(text);
+      });
+      grid.appendChild(card);
+    });
+    host.appendChild(grid);
+  });
+}
+
+/* ---------- contrast ---------- */
+function drawContrast() {
+  var t = T.tokens(mode);
+  var pairs = [
+    ["Text on BgBase", t.Text, t.BgBase],
+    ["TextSecondary on BgBase", t.TextSecondary, t.BgBase],
+    ["TextPlaceholder on BgContainer", t.TextPlaceholder, t.BgContainer],
+    ["Primary on BgContainer", t.Primary, t.BgContainer],
+    ["Error on BgContainer", t.Error, t.BgContainer],
+    ["BgContainer on BgLayout", t.BgContainer, t.BgLayout]
+  ];
+  var body = document.querySelector("#contrast tbody");
+  body.innerHTML = "";
+  pairs.forEach(function (p) {
+    var ratio = T.contrast(p[1], p[2], t.BgBase);
+    var grade = ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : ratio >= 3 ? "AA large" : "fails";
+    var tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + p[0] + "</td><td>" + ratio + ":1</td><td>" + grade + "</td>";
+    body.appendChild(tr);
+  });
+}
+
+/* ---------- shadows ---------- */
+function drawShadows() {
+  var host = document.getElementById("shadows");
+  host.innerHTML = "";
+  ["modal", "popover", "tooltip"].forEach(function (level) {
+    var card = document.createElement("div");
+    card.className = "shadow-card";
+    card.style.boxShadow = T.shadow(level, mode);
+    card.textContent = level;
+    host.appendChild(card);
+  });
+}
+
+/* ---------- scale ---------- */
+function drawScale() {
+  var body = document.querySelector("#scale tbody");
+  body.innerHTML = "";
+  Object.keys(T.scale).forEach(function (k) {
+    var v = T.scale[k];
+    var tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + k + "</td><td>" + v + (k === "FontWeightStrong" ? "" : "px") + "</td>";
+    body.appendChild(tr);
+  });
+}
+
+function draw() {
+  drawSwatches(); drawContrast(); drawShadows(); drawScale();
+}
+
+document.querySelectorAll("#modes button[data-mode]").forEach(function (b) {
+  b.addEventListener("click", function () { paint(b.dataset.mode); });
+});
+
+document.getElementById("copy-css").addEventListener("click", function () {
+  var text = ":root[data-lobe-theme=\"" + mode + "\"] {\n" + T.cssText(mode) + "\n}";
+  if (navigator.clipboard) navigator.clipboard.writeText(text);
+  toast("CSS variables copied (" + Object.keys(T.cssVars(mode)).length + ")");
+});
+
+document.getElementById("theme").addEventListener("click", function () {
+  paint(mode === "dark" ? "light" : "dark");
+});
+
+paint("dark");
+</script>
+</body></html>

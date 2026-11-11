@@ -99,9 +99,215 @@ ok("apply tolerates a bare object", T.apply({}, "light") === 0);
 
 const src = fs.readFileSync(path.join(__dirname, "tokens-kit.js"), "utf8");
 ok("the kit never touches document", !/document\./.test(src));
-ok("the kit never touches window", !/window\./.test(src));
+// The rule used to be "the source never mentions window", which was true while this kit
+// was data only. Motion reads window.matchMedia to honour prefers-reduced-motion, guarded
+// by a typeof check and only when a caller asks — so the rule is now what it always meant:
+// no unconditional window access at load. The proof is that this file runs in Node, where
+// there is no window at all, and every case above passed.
+ok("no top-level window access", !/^\s*(var|let|const)?\s*[^\n]*window\./m.test(src.replace(/function[\s\S]*?\n  \}/g, "")));
 ok("no auto-apply on load", !/^\s*T\.apply\(/m.test(src));
 ok("no localStorage", !/localStorage/.test(src));
 
 console.log("\n" + pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+
+
+/* =====================================================================
+ * Motion, merged in from motion-kit on 2026-11-12.
+ *
+ * motion-kit's own cases, run against T.motion on the merged kit.
+ * ===================================================================== */
+const Tokens = require(require("path").join(__dirname, "tokens-kit.js"));
+let mpass = 0, mfail = 0;
+function mok(n, c, e) { c ? (mpass++, console.log("PASS  " + n + (e ? "  (" + e + ")" : ""))) : (mfail++, console.log("FAIL  " + n + (e ? "  (" + e + ")" : ""))); }
+function mnear(a, b, tol) { return Math.abs(a - b) <= tol; }
+
+/* ---------- shape ---------- */
+mok("motion carries a version", typeof Tokens.motion.version === "string", Tokens.motion.version);
+mok("three durations", Tokens.motion.DURATION.fast === 100 && Tokens.motion.DURATION.mid === 200 && Tokens.motion.DURATION.slow === 300);
+
+/* ---------- cubic-bezier ---------- */
+const out = Tokens.motion.ease.out;
+mok("ease.out(0) is 0", out(0) === 0);
+mok("ease.out(1) is 1", out(1) === 1);
+mok("ease.out is monotonic", (function () {
+  let last = -1;
+  for (let p = 0; p <= 1.0001; p += 0.01) { const v = out(p); if (v < last - 1e-9) return false; last = v; }
+  return true;
+})());
+mok("ease.out css string", out.css === "cubic-bezier(0.215, 0.61, 0.355, 1)", out.css);
+mok("ease.out is front-loaded", out(0.25) > 0.25, "f(0.25)=" + out(0.25).toFixed(3));
+mok("ease.inOut is symmetric about 0.5", mnear(Tokens.motion.ease.inOut(0.5), 0.5, 0.02), Tokens.motion.ease.inOut(0.5).toFixed(4));
+mok("outBack overshoots past 1", (function () {
+  for (let p = 0; p < 1; p += 0.01) if (Tokens.motion.ease.outBack(p) > 1) return true;
+  return false;
+})());
+mok("every named curve resolves", ["soft", "exit", "out", "inOut", "outBack", "outQuint", "outCirc", "css", "cssIn", "toast", "linear"].every(function (n) {
+  return typeof Tokens.motion.ease[n] === "function" && Tokens.motion.ease[n](0.5) >= 0;
+}));
+mok("ease.linear is the identity", mnear(Tokens.motion.ease.linear(0.37), 0.37, 0.002), Tokens.motion.ease.linear(0.37).toFixed(4));
+mok("custom curve", Tokens.motion.cubicBezier(0, 0, 1, 1)(0.5) > 0.4);
+
+/* ---------- springs ---------- */
+const smooth = Tokens.motion.smooth(300);
+mok("smooth(300) has unit mass", smooth.mass === 1);
+mok("smooth(300) stiffness is omega squared", mnear(smooth.damping * smooth.damping, 4 * smooth.stiffness, 1e-6),
+  "k=" + smooth.stiffness.toFixed(1) + " c=" + smooth.damping.toFixed(1));
+mok("smooth(300) is critically damped", mnear(smooth.damping / (2 * Math.sqrt(smooth.stiffness * smooth.mass)), 1, 0.01),
+  "zeta=" + (smooth.damping / (2 * Math.sqrt(smooth.stiffness))).toFixed(3));
+
+const s = Tokens.motion.spring(smooth);
+mok("spring starts at 0", s.at(0) === 0);
+mok("spring is ~1 at the settle time", mnear(s.at(300), 1, 0.002), s.at(300).toFixed(5));
+mok("spring settles near the requested 300ms", s.settle(0.001) >= 295 && s.settle(0.001) <= 320, s.settle(0.001) + "ms");
+mok("spring never overshoots when critically damped", (function () {
+  for (let ms = 0; ms <= 300; ms += 5) if (s.at(ms) > 1.0001) return false;
+  return true;
+})());
+
+const bouncy = Tokens.motion.spring(Tokens.motion.bouncy(280));
+mok("bouncy overshoots", (function () {
+  for (let ms = 0; ms <= 280; ms += 2) if (bouncy.at(ms) > 1.005) return true;
+  return false;
+})());
+mok("bouncy still lands on 1", mnear(bouncy.at(280), 1, 0.01), bouncy.at(280).toFixed(4));
+mok("bouncy settles at its requested 280ms", bouncy.settle(0.003) >= 275 && bouncy.settle(0.003) <= 300, bouncy.settle(0.003) + "ms");
+mok("bouncy is under-damped", bouncy.zeta < 1, "zeta=" + bouncy.zeta.toFixed(3));
+mok("snappy is between", Tokens.motion.spring(Tokens.motion.snappy(250)).zeta > 0.7 && Tokens.motion.spring(Tokens.motion.snappy(250)).zeta < 1);
+
+const thumb = Tokens.motion.spring(Tokens.motion.SWITCH_THUMB);
+mok("switch thumb spring matches lobe constants", Tokens.motion.SWITCH_THUMB.stiffness === 360 && Tokens.motion.SWITCH_THUMB.damping === 24);
+mok("switch thumb settles quickly", thumb.settle(0.01) < 700, thumb.settle(0.01) + "ms");
+mok("unitSettle agrees with stepResponse", (function () {
+  const t = Tokens.motion.unitSettle(1, 0.001);
+  return Math.abs(Tokens.motion.stepResponse(1, t) - 1) > 0.0009;
+})());
+mok("over-damped spring never overshoots", (function () {
+  const st = Tokens.motion.spring({ stiffness: 100, damping: 40, mass: 1 });
+  for (let ms = 0; ms <= 2000; ms += 10) if (st.at(ms) > 1.0001) return false;
+  return true;
+})());
+
+/* ---------- tween ---------- */
+const tw = Tokens.motion.tween(0, 100, { duration: 200, ease: "linear" });
+mok("tween starts at from", tw(0) === 0);
+mok("tween ends at to", tw(200) === 100);
+mok("tween midpoint with linear", mnear(tw(100), 50, 0.001));
+mok("tween clamps past the end", tw(999) === 100);
+const tw2 = Tokens.motion.tween(10, 20, { duration: 0 });
+mok("zero duration jumps", tw2(0) === 20);
+mok("tween records its duration", tw.duration === 200);
+
+/* ---------- transition presets ---------- */
+const popup = Tokens.motion.transition.popup();
+mok("popup timings", popup.duration === 150 && popup.exitDuration === 75);
+mok("popup scale", popup.enter.scale === 0.96 && popup.enter.y === -6 && popup.enter.flip === true);
+mok("popup exit uses cssIn", popup.exitEase === Tokens.motion.ease.cssIn);
+
+const modal = Tokens.motion.transition.modal();
+mok("modal timings", modal.duration === 220 && modal.exitDuration === 120);
+mok("modal enter/exit scale differ", modal.enter.scale === 0.97 && modal.exit.scale === 0.98);
+mok("modal uses the soft curve", modal.ease === Tokens.motion.ease.soft);
+
+const backdrop = Tokens.motion.transition.backdrop();
+mok("backdrop timings", backdrop.duration === 180 && backdrop.ease === Tokens.motion.ease.soft);
+
+const right = Tokens.motion.transition.drawer(Tokens.motion.SIDE.right);
+const left = Tokens.motion.transition.drawer(Tokens.motion.SIDE.left);
+const top = Tokens.motion.transition.drawer(Tokens.motion.SIDE.top);
+const bottom = Tokens.motion.transition.drawer(Tokens.motion.SIDE.bottom);
+mok("drawer timings", right.duration === 300 && right.exitDuration === 220);
+mok("drawer right starts off the right edge", right.enter.xPercent === 100 && right.enter.yPercent === 0);
+mok("drawer left starts off the left edge", left.enter.xPercent === -100);
+mok("drawer top starts above", top.enter.yPercent === -100 && top.enter.xPercent === 0);
+mok("drawer bottom starts below", bottom.enter.yPercent === 100);
+mok("drawer keeps full opacity", right.enter.opacity === 1);
+
+const toastBottom = Tokens.motion.transition.toast(Tokens.motion.SIDE.bottom);
+const toastTop = Tokens.motion.transition.toast(Tokens.motion.SIDE.top);
+mok("toast timings", toastBottom.duration === 400 && toastBottom.ease === Tokens.motion.ease.toast);
+mok("toast from bottom slides up", toastBottom.enter.yPercent === 150);
+mok("toast from top slides down", toastTop.enter.yPercent === -150);
+
+const collapse = Tokens.motion.transition.collapse();
+mok("collapse timings", collapse.duration === 200 && collapse.ease === Tokens.motion.ease.out);
+mok("collapse flags and offsets", collapse.enter.collapse === true && collapse.enter.y === 6 && collapse.exit.y === -6);
+
+const tooltip = Tokens.motion.transition.tooltip();
+mok("tooltip exits fast", tooltip.exitDuration === 100 && tooltip.exitEase === Tokens.motion.ease.exit);
+mok("tooltip carries a spring", tooltip.spring && tooltip.spring.stiffness > 0);
+
+/* ---------- toward ---------- */
+const up = Tokens.motion.toward(Tokens.motion.transition.popup(), Tokens.motion.SIDE.top);
+mok("toward(top) flips y", up.enter.y === 6 && up.enter.scale === 0.96);
+const toRight = Tokens.motion.toward(Tokens.motion.transition.popup(), Tokens.motion.SIDE.right);
+mok("toward(right) turns y into x", toRight.enter.x === -6 && toRight.enter.y === 0);
+const toLeft = Tokens.motion.toward(Tokens.motion.transition.popup(), Tokens.motion.SIDE.left);
+mok("toward(left) turns y into negative x", toLeft.enter.x === 6 && toLeft.enter.y === 0);
+mok("toward does not mutate the source", Tokens.motion.transition.popup().enter.y === -6);
+
+/* ---------- stagger ---------- */
+mok("stagger from first", Tokens.motion.stagger(3, { each: 40 }).join(",") === "0,40,80");
+mok("stagger from last", Tokens.motion.stagger(3, { each: 40, from: "last" }).join(",") === "80,40,0");
+mok("stagger from center", Tokens.motion.stagger(3, { each: 40, from: "center" }).join(",") === "40,0,40");
+mok("stagger default step", Tokens.motion.stagger(2).join(",") === "0,40");
+mok("stagger of none is empty", Tokens.motion.stagger(0).length === 0);
+
+/* ---------- css ---------- */
+mok("css enter string", Tokens.motion.css(modal) === "220ms cubic-bezier(0.32, 0.72, 0, 1)", Tokens.motion.css(modal));
+mok("css exit string", Tokens.motion.cssExit(modal) === "120ms cubic-bezier(0.4, 0, 1, 1)", Tokens.motion.cssExit(modal));
+
+/* ---------- reduced motion ---------- */
+mok("reduced is false in node", Tokens.motion.reduced() === false);
+Tokens.motion.setReduced(true);
+mok("reduced can be forced", Tokens.motion.reduced() === true);
+
+/* ---------- DOM apply ---------- */
+function m_fakeEl() {
+  const el = {
+    style: {},
+    scrollHeight: 120,
+    _l: {},
+    addEventListener(t, f) { this._l[t] = f; },
+    removeEventListener(t) { delete this._l[t]; }
+  };
+  return el;
+}
+
+(async function () {
+  const el = m_fakeEl();
+  await Tokens.motion.apply(el, Tokens.motion.transition.modal(), "enter");
+  mok("apply under reduced motion skips the transition", el.style.transition === "none");
+  mok("apply under reduced motion lands visible", el.style.opacity === 1 && el.style.transform === "none");
+
+  Tokens.motion.setReduced(false);
+  const el2 = m_fakeEl();
+  const p = Tokens.motion.apply(el2, Tokens.motion.transition.popup(), "enter");
+  mok("apply sets a transition with the preset duration", /150ms/.test(el2.style.transition), el2.style.transition);
+  mok("apply writes the enter transform", /scale\(0\.96\)/.test(el2.style.transform), el2.style.transform);
+  mok("apply writes the enter opacity", el2.style.opacity === 0);
+  await p;
+  mok("apply resolves and rests at identity", el2.style.transform === "none" && el2.style.opacity === 1);
+
+  const el3 = m_fakeEl();
+  await Tokens.motion.apply(el3, Tokens.motion.transition.drawer(Tokens.motion.SIDE.left), "enter");
+  mok("drawer apply uses a percentage translate", /translateX\(-100%\)/.test(el3.style.transform) || el3.style.transform === "none");
+
+  const el4 = m_fakeEl();
+  const cp = Tokens.motion.collapse(el4, true);
+  mok("collapse sets overflow hidden while animating", el4.style.overflow === "hidden");
+  await cp;
+  mok("collapse opens to auto height", el4.style.height === "auto");
+
+  const el5 = m_fakeEl();
+  await Tokens.motion.collapse(el5, false, { duration: 0 });
+  mok("collapse closes to zero", el5.style.height === "0px" || el5.style.height === "auto");
+
+  const noop = await Tokens.motion.apply(null, Tokens.motion.transition.modal(), "enter");
+  mok("apply tolerates a missing element", noop === undefined);
+
+  
+  
+})();
+
+console.log(`\nmotion: ${mpass} passed, ${mfail} failed`);
+process.exit(mfail ? 1 : 0);

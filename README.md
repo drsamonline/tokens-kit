@@ -1,5 +1,7 @@
 # tokens-kit
 
+**Colour, size, shadow — and motion.** This kit absorbed `motion-kit` on 2026-11-12: the springs, easings and transition presets live here as `T.motion.*`, because a token set without its motion is half a design system.
+
 [![live](https://img.shields.io/badge/live-online-22c55e)](https://drsamonline.github.io/tokens-kit/)
 [![test](https://github.com/drsamonline/tokens-kit/actions/workflows/test.yml/badge.svg)](https://github.com/drsamonline/tokens-kit/actions/workflows/test.yml)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)

@@ -69,7 +69,8 @@ nothing else.
 
 ```
 node test-node.js
-55 passed, 0 failed
+60 passed, 0 failed      # tokens
+motion: 67 passed, 0 failed
 ```
 
 The tests check that all 121 names resolve in both modes, that light and dark actually

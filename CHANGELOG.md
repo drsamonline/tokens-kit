@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.1.0 — 2026-11-14
+
+**A filled surface now has a paired label.** `T.ON` and `T.on(surface, mode)`.
+
+- **Added** `T.on(name, mode)` — the foreground a filled surface needs in that mode,
+  and `T.ON`, the table behind it. `T.on("Primary","dark")` is `#1f1f1f`, not white.
+- **Why**: `Primary` and `BgSolid` invert with the mode while `TextLightSolid` is
+  `#ffffff` in both. Pairing them gives 1.16:1 in dark — an invisible button label.
+  Eighteen pages in the fleet had exactly that, independently. The token set had no
+  way to express the pair, so every caller re-derived it and got it wrong.
+- **Nothing changed** in the generated block: `T.light`, `T.dark`, `T.names` and the
+  counts stay byte-identical to lobe-mygo. `T.ON` is hand-written API, outside the
+  `@generated` markers.
+- **Tests**: five added, one of which asserts the old pairing fails, so the reason
+  survives in the suite.
+
 ## 2.0.0 — 2026-11-12
 
 **The motion moved in.** `motion-kit` is folded into this kit, reached as `T.motion.*`.

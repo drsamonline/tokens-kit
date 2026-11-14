@@ -21,7 +21,7 @@
   else root.Tokens = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  var T = { version: "2.0.0" };
+  var T = { version: "2.1.0" };
 
   /* ---------- generated data ---------- */
   /* Rewritten by scripts/gen-tokens.js from tokens.source.json. Do not edit by
@@ -996,6 +996,38 @@
   };
 
   
+  /* ---------- on-surface pairing ----------------------------------------
+   * THE BUG THIS EXISTS TO STOP. Primary and BgSolid invert with the mode
+   * (#222222 light, #eeeeee dark; #000000 light, near-white dark) while
+   * TextLightSolid is #ffffff in BOTH. A filled button that takes its surface
+   * from one and its label from the other is correct in light and 1.16:1 in
+   * dark — invisible. So a filled surface must be paired with a foreground
+   * chosen per mode, never with a fixed "light solid" white.
+   *
+   *   T.on("Primary", "dark");    // "#1f1f1f"
+   *   T.contrast(T.on("Primary", mode), T[dateMode].Primary) >= 4.5
+   */
+  T.ON = {
+    light: { Primary: "#ffffff", PrimaryHover: "#ffffff", BgSolid: "#ffffff", Fill: "#ffffff" },
+    dark:  { Primary: "#1f1f1f", PrimaryHover: "#1f1f1f", BgSolid: "#141414", Fill: "#141414" }
+  };
+
+  /* The paired foreground for a filled surface token. Unknown surfaces fall back
+     to whichever of Text / TextLightSolid measures better against the resolved
+     colour, so the answer is always legible rather than merely conventional. */
+  T.on = function (surfaceName, mode) {
+    var m = mode === "dark" ? "dark" : "light";
+    var table = T.ON[m];
+    if (Object.prototype.hasOwnProperty.call(table, surfaceName)) return table[surfaceName];
+    var t = T.tokens(m);
+    var surface = t[surfaceName];
+    if (!surface) return table.Primary;
+    var base = t.BgContainer;
+    var a = T.contrast(t.Text, surface, base);
+    var b = T.contrast(t.TextLightSolid, surface, base);
+    return a >= b ? t.Text : t.TextLightSolid;
+  };
+
   T.motion = MOTION;
 
   return T;

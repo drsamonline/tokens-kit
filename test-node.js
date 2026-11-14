@@ -8,6 +8,19 @@ const isColour = (v) => typeof v === "string" && /^(#[0-9a-f]{6}|rgba?\([\d., ]+
 
 /* ---------- shape ---------- */
 ok("version is a string", typeof T.version === "string", T.version);
+
+/* ---------- on-surface pairing (the invisible-label defect) ---------- */
+ok("T.on pairs Primary in light", T.contrast(T.on("Primary","light"), T.light.Primary) >= 4.5,
+   T.contrast(T.on("Primary","light"), T.light.Primary));
+ok("T.on pairs Primary in dark", T.contrast(T.on("Primary","dark"), T.dark.Primary) >= 4.5,
+   T.contrast(T.on("Primary","dark"), T.dark.Primary));
+ok("T.on pairs BgSolid in dark", T.contrast(T.on("BgSolid","dark"), T.dark.BgSolid) >= 4.5,
+   T.contrast(T.on("BgSolid","dark"), T.dark.BgSolid));
+ok("TextLightSolid alone FAILS on dark Primary (the bug)",
+   T.contrast(T.dark.TextLightSolid, T.dark.Primary) < 4.5,
+   T.contrast(T.dark.TextLightSolid, T.dark.Primary));
+ok("an unknown surface still resolves legibly", T.contrast(T.on("BgElevated","dark"), T.dark.BgElevated) >= 4.5,
+   T.contrast(T.on("BgElevated","dark"), T.dark.BgElevated));
 ok("light has 187 colour values", Object.keys(T.light).length === 187, Object.keys(T.light).length);
 ok("dark has 187 colour values", Object.keys(T.dark).length === 187, Object.keys(T.dark).length);
 ok("121 colour token names", T.names.length === 121, T.names.length);
